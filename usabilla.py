@@ -127,10 +127,20 @@ class APIClient(object):
     host = 'data.usabilla.com'
     host_protocol = 'https://'
 
-    def __init__(self, client_key, secret_key):
-        """Initialize an APIClient object."""
+    def __init__(self, client_key, secret_key, timeout=(3.05, 15)):
+        """Initialize an APIClient object.
+
+        :param client_key: Api client key
+        :type client_key: str
+        :param secret_key: Client's key secret
+        :type client_key: str
+        :param timeout: Requests timeout
+        :type timeout: float or tuple
+
+        """
         self.query_parameters = ''
         self.credentials = Credentials(client_key=client_key, secret_key=secret_key)
+        self.timeout = timeout
 
     def sign(self, key, msg):
         """Get the digest of the message using the specified key."""
@@ -235,14 +245,19 @@ class APIClient(object):
 
         headers = {'date': usbldate, 'Authorization': authorization_header}
 
-        # Send the request.
         request_url = self.host + scope + '?' + canonical_querystring
-        r = requests.get(self.host_protocol + request_url, headers=headers)
-
-        if r.status_code != 200:
-            return r
-        else:
-            return r.json()
+        # Send the request.
+        # Use context-manager (with ... as r:) to auto-close the connection.
+        #
+        # Add timeouts, to avoid hanging connections. See:
+        # http://docs.python-requests.org/en/master/user/advanced/#timeouts
+        with requests.get(self.host_protocol + request_url,
+                         headers=headers,
+                         timeout=self.timeout) as r:
+            if r.status_code != 200:
+                return r
+            else:
+                return r.json()
 
 
     def check_resource_validity(self, scope, product, resource):
